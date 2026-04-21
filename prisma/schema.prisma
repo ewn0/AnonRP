@@ -1,0 +1,874 @@
+// AnonRP - Schéma complet Discord-like
+// Version avec : mentions, notifications enrichies, transferts, suppression groupes, etc.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// UTILISATEURS & AUTHENTIFICATION
+// ============================================================
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  emailVerified     DateTime?
+  username          String    @unique
+  passwordHash      String
+
+  displayName       String?
+  bio               String?   @db.VarChar(500)
+  avatarUrl         String?
+  bannerUrl         String?
+
+  isAdult           Boolean   @default(false)
+  role              UserRole  @default(MEMBER)
+  isBanned          Boolean   @default(false)
+  banReason         String?
+  bannedAt          DateTime?
+  bannedByUserId    String?
+
+  coins             Int       @default(0)
+  totalCoinsEarned  BigInt    @default(0)
+  level             Int       @default(1)
+  xp                BigInt    @default(0)
+  xpBoostPercent    Float     @default(0)
+
+  friendLimit       Int       @default(10)
+
+  premiumTier       PremiumTier?
+  premiumUntil      DateTime?
+
+  discordId         String?   @unique
+  discordUsername   String?
+
+  totpSecret        String?
+  twoFactorEnabled  Boolean   @default(false)
+
+  isInvisible       Boolean   @default(false)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastSeenAt        DateTime  @default(now())
+  lastMessageAt     DateTime?
+  lastCoinEarnedAt  DateTime?
+  messagesToNextCoin Int      @default(10)
+
+  sessions              Session[]
+  accounts              Account[]
+  verificationTokens    VerificationRequest[]
+
+  ownedGroups           Group[]             @relation("GroupOwner")
+  groupMemberships      GroupMembership[]
+  groupJoinRequestsMade GroupJoinRequest[]  @relation("JoinRequestUser")
+  groupNameChangeRequests GroupNameChangeRequest[] @relation("NameChangeRequester")
+  channelMessages       ChannelMessage[]    @relation("ChannelMessageAuthor")
+  channelMessagesDeleted ChannelMessage[]   @relation("ChannelMessageDeletedBy")
+  channelMentions       ChannelMessageMention[] @relation("MentionedUser")
+
+  sentMessages          Message[]           @relation("MessageSender")
+  receivedMessages      Message[]           @relation("MessageReceiver")
+
+  sentFriendRequests    FriendRequest[]     @relation("FriendRequestFrom")
+  receivedFriendRequests FriendRequest[]    @relation("FriendRequestTo")
+  friendshipsA          Friendship[]        @relation("FriendshipUserA")
+  friendshipsB          Friendship[]        @relation("FriendshipUserB")
+
+  giftsSent             Gift[]              @relation("GiftSender")
+  giftsReceived         Gift[]              @relation("GiftReceiver")
+
+  purchases             Purchase[]
+  coinTransactions      CoinTransaction[]
+  ownedEmojis           UserEmoji[]
+
+  reportsMade           Report[]            @relation("ReportedBy")
+  reportsReceived       Report[]            @relation("ReportedUser")
+
+  auditLogsActions      AuditLog[]          @relation("AuditActor")
+
+  banAppeals            BanAppeal[]
+
+  systemNotifications   SystemNotification[]
+
+  groupDeletionRequests GroupDeletionRequest[] @relation("DeletionRequester")
+  groupTransfersFrom    GroupOwnershipTransfer[] @relation("TransferFrom")
+  groupTransfersTo      GroupOwnershipTransfer[] @relation("TransferTo")
+
+  @@index([email])
+  @@index([username])
+  @@index([level])
+  @@index([isInvisible])
+}
+
+enum UserRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+}
+
+enum PremiumTier {
+  BRONZE
+  SILVER
+  GOLD
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationRequest {
+  id         String   @id @default(cuid())
+  userId     String?
+  identifier String
+  token      String   @unique
+  expires    DateTime
+  type       VerificationType
+  createdAt  DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([identifier, token])
+}
+
+enum VerificationType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+  EMAIL_CHANGE
+}
+
+// ============================================================
+// GROUPES
+// ============================================================
+
+model GroupCategory {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  emoji       String?
+  description String?
+  displayOrder Int     @default(0)
+  isActive    Boolean  @default(true)
+
+  groups      Group[]
+}
+
+model Group {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  description   String   @db.VarChar(1000)
+  bannerUrl     String?
+  iconUrl       String?
+
+  ownerId       String
+  owner         User     @relation("GroupOwner", fields: [ownerId], references: [id])
+
+  categoryId    String?
+  category      GroupCategory? @relation(fields: [categoryId], references: [id])
+
+  visibility    GroupVisibility @default(PUBLIC)
+  isNSFW        Boolean  @default(false)
+  isFeatured    Boolean  @default(false)
+  featuredUntil DateTime?
+
+  isSystemGroup Boolean  @default(false)
+
+  memberCount   Int      @default(1)
+  activityScore Float    @default(0)
+
+  activeMembersCount24h Int       @default(0)
+  activeCountUpdatedAt  DateTime?
+
+  maxTextChannels   Int  @default(5)
+  maxVoiceChannels  Int  @default(2)
+
+  tags          String[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  memberships   GroupMembership[]
+  joinRequests  GroupJoinRequest[]
+  channels      Channel[]
+  bans          GroupBan[]
+
+  deletionRequests  GroupDeletionRequest[]
+  transfers         GroupOwnershipTransfer[]
+  nameChangeRequests GroupNameChangeRequest[]
+
+  @@index([slug])
+  @@index([activityScore])
+  @@index([isFeatured])
+  @@index([categoryId])
+  @@index([visibility])
+}
+
+enum GroupVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model GroupMembership {
+  id        String         @id @default(cuid())
+  userId    String
+  groupId   String
+  role      GroupRole      @default(MEMBER)
+
+  mutedUntil DateTime?
+  nickname   String?
+
+  joinedAt  DateTime       @default(now())
+  lastReadAt DateTime      @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group     Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@index([groupId, role])
+}
+
+enum GroupRole {
+  MEMBER
+  MODERATOR
+  ADMIN
+}
+
+model GroupJoinRequest {
+  id         String   @id @default(cuid())
+  groupId    String
+  userId     String
+  message    String?  @db.VarChar(300)
+  status     JoinRequestStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user       User     @relation("JoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId, status])
+}
+
+enum JoinRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model GroupBan {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  reason    String?
+  bannedBy  String
+  createdAt DateTime @default(now())
+
+  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+}
+
+model GroupNameChangeRequest {
+  id            String   @id @default(cuid())
+  groupId       String
+  requestedById String
+  currentName   String   @db.VarChar(50)
+  proposedName  String   @db.VarChar(50)
+  currentSlug   String?
+  proposedSlug  String?
+  reason        String?  @db.VarChar(500)
+
+  status        NameChangeStatus @default(PENDING)
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+
+  createdAt     DateTime @default(now())
+
+  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester     User     @relation("NameChangeRequester", fields: [requestedById], references: [id])
+
+  @@index([status, createdAt])
+  @@index([groupId])
+}
+
+enum NameChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================================
+// CHANNELS
+// ============================================================
+
+model Channel {
+  id          String       @id @default(cuid())
+  groupId     String
+  name        String       @db.VarChar(50)
+  slug        String       @db.VarChar(50)
+  description String?      @db.VarChar(200)
+  type        ChannelType  @default(TEXT)
+
+  position    Int          @default(0)
+
+  isSystem    Boolean      @default(false)
+
+  writePermission ChannelWritePermission @default(MEMBERS)
+
+  isLocked    Boolean      @default(false)
+  isDeleted   Boolean      @default(false)
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  messages    ChannelMessage[]
+
+  @@unique([groupId, slug])
+  @@index([groupId, position])
+}
+
+enum ChannelType {
+  TEXT
+  VOICE
+  ANNOUNCEMENT
+}
+
+enum ChannelWritePermission {
+  MEMBERS
+  MODS_ONLY
+  READ_ONLY
+}
+
+model ChannelMessage {
+  id         String   @id @default(cuid())
+  channelId  String
+  authorId   String
+
+  content    String   @db.Text
+
+  replyToId  String?
+  replyTo    ChannelMessage?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies    ChannelMessage[] @relation("MessageReply")
+
+  isEdited   Boolean  @default(false)
+  editedAt   DateTime?
+
+  isDeleted  Boolean  @default(false)
+  deletedById String?
+  deletedBy   User?   @relation("ChannelMessageDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  deletedAt   DateTime?
+  deletedReason String? @db.VarChar(300)
+
+  countsForCoins Boolean @default(true)
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author     User     @relation("ChannelMessageAuthor", fields: [authorId], references: [id])
+
+  mentions   ChannelMessageMention[]
+
+  @@index([channelId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+// Nouveau : mentions @user dans un message
+model ChannelMessageMention {
+  id              String   @id @default(cuid())
+  messageId       String
+  mentionedUserId String
+  createdAt       DateTime @default(now())
+
+  message         ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user            User           @relation("MentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, mentionedUserId])
+  @@index([mentionedUserId])
+}
+
+// ============================================================
+// SUPPRESSION & TRANSFERT DE GROUPE
+// ============================================================
+
+model GroupDeletionRequest {
+  id            String   @id @default(cuid())
+  groupId       String
+  requestedById String
+  reason        String?  @db.VarChar(500)
+
+  status        DeletionStatus @default(PENDING)
+  reviewedById  String?
+  reviewedAt    DateTime?
+  reviewNote    String?
+
+  createdAt     DateTime @default(now())
+
+  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester     User     @relation("DeletionRequester", fields: [requestedById], references: [id])
+
+  @@index([status])
+}
+
+enum DeletionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model GroupOwnershipTransfer {
+  id           String   @id @default(cuid())
+  groupId      String
+  fromUserId   String
+  toUserId     String
+  status       TransferStatus @default(PENDING)
+  createdAt    DateTime @default(now())
+  respondedAt  DateTime?
+
+  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromUser     User     @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser       User     @relation("TransferTo", fields: [toUserId], references: [id])
+
+  @@index([groupId, status])
+  @@index([toUserId, status])
+}
+
+enum TransferStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+// ============================================================
+// NOTIFICATIONS SYSTÈME
+// ============================================================
+
+model SystemNotification {
+  id         String   @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String   @db.VarChar(200)
+  content    String   @db.Text
+  linkUrl    String?
+  metadata   Json?
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+enum NotificationType {
+  GROUP_DELETED
+  GROUP_BANNED
+  GROUP_KICKED
+  GROUP_BANNED_FROM
+  GROUP_PROMOTED
+  JOIN_REQUEST_RECEIVED
+  JOIN_REQUEST_APPROVED
+  JOIN_REQUEST_REJECTED
+  OWNERSHIP_TRANSFER_OFFER
+  OWNERSHIP_TRANSFER_ACCEPTED
+  NAME_CHANGE_APPROVED
+  NAME_CHANGE_REJECTED
+  MESSAGE_DELETED_BY_MOD
+  MESSAGE_MENTION
+  MESSAGE_REPLY
+  FRIEND_REQUEST
+  FRIEND_REQUEST_ACCEPTED
+  GIFT_RECEIVED
+  LEVEL_UP
+  PREMIUM_EXPIRING
+  ADMIN_MESSAGE
+  REPORT_HANDLED
+}
+
+// ============================================================
+// MESSAGERIE PRIVÉE & AMIS
+// ============================================================
+
+model FriendRequest {
+  id         String              @id @default(cuid())
+  fromId     String
+  toId       String
+  status     FriendRequestStatus @default(PENDING)
+  message    String?             @db.VarChar(200)
+  createdAt  DateTime            @default(now())
+  respondedAt DateTime?
+
+  from       User                @relation("FriendRequestFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to         User                @relation("FriendRequestTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+model Friendship {
+  id        String   @id @default(cuid())
+  userAId   String
+  userBId   String
+  createdAt DateTime @default(now())
+
+  userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+
+  @@unique([userAId, userBId])
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  receiverId     String
+  content        String       @db.Text
+  readAt         DateTime?
+  isDeleted      Boolean      @default(false)
+  isSystem       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  receiver       User         @relation("MessageReceiver", fields: [receiverId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([receiverId, readAt])
+}
+
+// ============================================================
+// ÉCONOMIE
+// ============================================================
+
+model CoinTransaction {
+  id        String              @id @default(cuid())
+  userId    String
+  amount    Int
+  balance   Int
+  type      CoinTransactionType
+  metadata  Json?
+  createdAt DateTime            @default(now())
+
+  user      User                @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([type])
+}
+
+enum CoinTransactionType {
+  MESSAGE_REWARD
+  LEVEL_UP_REWARD
+  PURCHASE
+  PREMIUM_BONUS
+  GIFT_SENT
+  GIFT_RECEIVED
+  STORE_PURCHASE
+  GROUP_CREATION
+  GROUP_BOOST
+  FRIEND_LIMIT_INCREASE
+  ADMIN_ADJUSTMENT
+  REFUND
+}
+
+model GiftType {
+  id            String  @id @default(cuid())
+  slug          String  @unique
+  name          String
+  description   String?
+  iconUrl       String
+  costCoins     Int
+  xpBoostPercent Float
+  displayOrder  Int     @default(0)
+  isActive      Boolean @default(true)
+
+  gifts         Gift[]
+}
+
+model Gift {
+  id          String    @id @default(cuid())
+  giftTypeId  String
+  senderId    String
+  receiverId  String
+  message     String?   @db.VarChar(200)
+  createdAt   DateTime  @default(now())
+
+  giftType    GiftType  @relation(fields: [giftTypeId], references: [id])
+  sender      User      @relation("GiftSender", fields: [senderId], references: [id])
+  receiver    User      @relation("GiftReceiver", fields: [receiverId], references: [id])
+
+  @@index([receiverId])
+  @@index([senderId])
+}
+
+model StoreItem {
+  id          String        @id @default(cuid())
+  slug        String        @unique
+  name        String
+  description String?
+  type        StoreItemType
+  costCoins   Int
+  assetUrl    String?
+  metadata    Json?
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+
+  userEmojis  UserEmoji[]
+}
+
+enum StoreItemType {
+  EMOJI
+  AVATAR_PACK
+  BANNER_PACK
+  PROFILE_CUSTOM_AVATAR
+  PROFILE_CUSTOM_BANNER
+  PROFILE_EXTENDED_BIO
+  FRIEND_LIMIT_PACK
+  GROUP_BOOST
+}
+
+model UserEmoji {
+  id         String    @id @default(cuid())
+  userId     String
+  storeItemId String
+  acquiredAt DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeItem  StoreItem @relation(fields: [storeItemId], references: [id])
+
+  @@unique([userId, storeItemId])
+}
+
+model CoinPack {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  coinAmount  Int
+  bonusCoins  Int      @default(0)
+  priceCents  Int
+  displayOrder Int     @default(0)
+  isActive    Boolean  @default(true)
+
+  purchases   Purchase[]
+}
+
+model PremiumPlan {
+  id            String      @id @default(cuid())
+  tier          PremiumTier @unique
+  name          String
+  monthlyCoins  Int
+  xpBoostPercent Float
+  priceCents    Int
+  discordRoleId String?
+  stripePriceId String?
+  isActive      Boolean     @default(true)
+
+  purchases     Purchase[]
+}
+
+model Purchase {
+  id              String         @id @default(cuid())
+  userId          String
+  type            PurchaseType
+  status          PurchaseStatus @default(PENDING)
+
+  amountCents     Int
+  currency        String         @default("EUR")
+
+  coinPackId      String?
+  premiumPlanId   String?
+
+  stripeSessionId String?        @unique
+  stripePaymentIntentId String?  @unique
+
+  invoiceNumber   String?        @unique
+  billingCountry  String?
+  vatRate         Float?
+  vatAmountCents  Int?
+
+  createdAt       DateTime       @default(now())
+  completedAt     DateTime?
+
+  user            User           @relation(fields: [userId], references: [id])
+  coinPack        CoinPack?      @relation(fields: [coinPackId], references: [id])
+  premiumPlan     PremiumPlan?   @relation(fields: [premiumPlanId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+enum PurchaseType {
+  COIN_PACK
+  PREMIUM_SUBSCRIPTION
+}
+
+enum PurchaseStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+// ============================================================
+// MODÉRATION
+// ============================================================
+
+model Report {
+  id              String       @id @default(cuid())
+  reporterId      String
+  reportedUserId  String?
+
+  targetType      ReportTargetType
+  targetId        String
+
+  reason          ReportReason
+  description     String?      @db.VarChar(1000)
+
+  status          ReportStatus @default(PENDING)
+
+  handledByUserId String?
+  handledAt       DateTime?
+  resolution      String?
+
+  discordMessageId String?
+  transcriptUrl   String?
+
+  createdAt       DateTime     @default(now())
+
+  reporter        User         @relation("ReportedBy", fields: [reporterId], references: [id])
+  reportedUser    User?        @relation("ReportedUser", fields: [reportedUserId], references: [id])
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([reportedUserId, createdAt])
+}
+
+enum ReportTargetType {
+  USER
+  CHANNEL_MESSAGE
+  MESSAGE
+  GROUP
+  CHANNEL
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE_SPEECH
+  SEXUAL_CONTENT
+  MINOR_SAFETY
+  VIOLENCE
+  ILLEGAL_CONTENT
+  IMPERSONATION
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
+
+model BanAppeal {
+  id          String        @id @default(cuid())
+  userId      String
+  reason      String        @db.Text
+  status      AppealStatus  @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  response    String?       @db.Text
+  createdAt   DateTime      @default(now())
+
+  user        User          @relation(fields: [userId], references: [id])
+
+  @@index([status])
+}
+
+enum AppealStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  actorId     String
+  action      String
+  targetType  String?
+  targetId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
+
+  @@index([actorId, createdAt])
+  @@index([action])
+}
+
+model AppConfig {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model RateLimit {
+  id         String   @id @default(cuid())
+  identifier String
+  action     String
+  count      Int      @default(1)
+  windowStart DateTime @default(now())
+
+  @@unique([identifier, action])
+  @@index([windowStart])
+}
