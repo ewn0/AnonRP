@@ -1,120 +1,104 @@
-# 📦 Gros patch — Frontend & UI (ZIP 2/2)
+# 🩹 Fix cadeaux persistants + Feature non-lus
 
-⚠️ **Avant d'appliquer ce ZIP : le ZIP 1 (backend) doit être déjà appliqué et migré.**
+## ✅ Ce qui est corrigé/ajouté
+
+### 🎁 Bugs cadeaux (les 2 problèmes que tu as vus)
+- **Le message système est maintenant persisté en BDD** dans `ChannelMessage` avec un flag `isGiftSystem`
+- Plus besoin d'être présent pour le voir : en rechargeant la page ou en revenant plus tard, il est toujours là
+- Il compte aussi dans l'historique (pagination, non-lus, etc.)
+- Rendu spécial : message centré avec dégradé violet/rose et texte en gras pour les noms
+
+### 🔔 Feature non-lus
+- **Badge à côté du nom du channel** dans la sidebar du groupe
+- **Rouge avec chiffre** si tu as des mentions/replies non lus (ça te concerne directement)
+- **Gris avec chiffre** si juste des messages normaux
+- **99+** si plus de 99
+- **Marqué lu quand tu scrolles en bas du chat** (pas juste en ouvrant la page)
+- Refresh auto toutes les 30s via polling
 
 ## 🚀 Installation
 
-1. **Arrête `npm run dev`**
+### 1. Modifier le schema Prisma
 
-2. **Copie-colle** :
-   - `src/` par-dessus ton projet
-   - `prisma/schema.prisma` par-dessus le tien (NB: ajoute `isInvisible` au User)
+⚠️ **Étape critique** — ouvre `SCHEMA-CHANGES.md` dans ce ZIP et suis les 5 modifs à copier-coller dans ton `prisma/schema.prisma`.
 
-3. **Migration BDD** :
-   ```bash
-   npx prisma migrate dev --name invisible_mode
-   ```
+C'est rapide (2 minutes) et je t'ai choisi cette méthode plutôt qu'un schéma complet à écraser pour ne pas perdre tes dernières modifs.
 
-4. **Relance** :
-   ```bash
-   npm run dev
-   ```
+### 2. Appliquer la migration
 
-## ✨ Ce qui devient visible
+```bash
+cd C:\Users\Asala\Desktop\AnonRP
+npx prisma db push
+```
 
-### 🔔 Cloche de notifications (header)
-- Badge rouge avec nombre de non lues
-- Clic → panneau déroulant des 15 dernières
-- "Tout marquer comme lu"
-- Clic sur une notification avec un lien → t'emmène à la page + marque comme lu
-- Refresh auto toutes les 60s
+### 3. Copier les fichiers
 
-### 📊 Stats dans le header (à côté du logo)
-- **Niveau + mini barre XP** (cliquable → profil)
-- **Coins** (cliquable → boutique)
-- Refresh auto toutes les 30s
+Copie `src/` par-dessus ton projet (écrase les fichiers existants).
 
-### 👁️ Toggle invisible (ADMIN only)
-- Icône 👁️ dans le header → clique pour passer invisible 👁️‍🗨️
-- En mode invisible :
-  - Tu n'apparais PAS dans les listes de membres des groupes
-  - Tu n'apparais PAS dans les compteurs "X en ligne"
-  - Ton `lastSeenAt` n'est plus mis à jour
-  - Tu restes fonctionnel : tu peux lire, poster, modérer
-- Un indicateur ambre s'affiche pour te rappeler que tu es invisible
+### 4. Redémarre
 
-### 🖊️ Édition de tes propres messages
-- Au hover d'un message que tu as envoyé il y a <15 min → icône 🖊️
-- Clic → textarea inline (Entrée = enregistrer, Échap = annuler)
-- Diffusion temps réel aux autres
-- Badge "(modifié)" ajouté à ton message
+```bash
+# Ctrl+C pour arrêter npm run dev
+npm run dev
+```
 
-### ↪️ Répondre à un message
-- Au hover d'un message → icône ↪
-- Clic → bandeau "Réponse à @user" s'affiche au-dessus de l'input
-- Ton message est lié au précédent (citation visible au-dessus)
-- L'auteur original reçoit une notification "a répondu à ton message"
+## 🧪 Tests
 
-### @ Mentions dans les messages
-- Tape `@` suivi du début d'un pseudo → autocomplete apparaît au-dessus de l'input
-- Flèches ↑↓ pour naviguer, Tab/Entrée pour valider
-- Dans les messages, les mentions sont highlighted en violet
-- La personne mentionnée reçoit une notification
+### Test 1 — Le cadeau persiste (problème 1 corrigé)
+1. Compte A et B dans le même channel
+2. A offre un cadeau à B depuis la sidebar (hover 🎁)
+3. Le message doré apparaît pour les deux
+4. B quitte le channel et y revient → **le message est toujours là** ✅
 
-### 🏛️ Accès staff plateforme
-- Les admins/modos plateforme peuvent accéder à TOUS les groupes, même privés
-- Badge "staff" s'affiche à côté du nom du groupe
-- Ils peuvent modérer, supprimer des messages, voir l'historique
+### Test 2 — Le cadeau est vu par tous (problème 2 corrigé)
+1. A offre un cadeau à B pendant que C n'est pas dans le channel
+2. C ouvre le channel plus tard → **il voit le message** ✅
 
-### 📋 Validation des demandes de rejoindre
-- Badge ambre "X" dans la sidebar du groupe (si des demandes en attente)
-- Clic → page `/g/[slug]/requests`
-- Pour chaque demande : avatar + nom + niveau + date + message optionnel
-- Boutons "✓ Accepter" et "✗ Refuser" (avec raison optionnelle)
-- Notifications envoyées automatiquement au demandeur
+### Test 3 — Non-lus basiques
+1. Compte A va dans `#général`
+2. Compte B envoie 3 messages dans `#général`
+3. Dans la sidebar de A : badge gris "3" à côté de `#général`
+4. A ouvre le channel, scrolle en bas → badge disparaît ✅
 
-### 📫 Emails réels (Resend)
-- À l'inscription, un vrai email est envoyé via Resend
-- Template HTML soigné, thème AnonRP
-- Fallback console si `RESEND_API_KEY` manquante
+### Test 4 — Mentions en rouge
+1. Compte B envoie "Salut @A comment tu vas ?" dans `#général`
+2. Dans la sidebar de A : badge **rouge "1"** à côté de `#général` (car A est mentionné)
+3. A ouvre, scrolle en bas → badge disparaît ✅
 
-### 👋 Auto-join Général
-- Chaque nouvel inscrit est ajouté automatiquement au groupe "Général"
+### Test 5 — Seulement quand on scrolle en bas
+1. 50 messages non lus dans `#général`
+2. A ouvre le channel mais scrolle vers le haut pour lire les anciens
+3. Badge reste affiché
+4. A scrolle jusqu'en bas → badge disparaît ✅
 
-## 🧪 Comment tester
+## 📝 Fichiers du ZIP
 
-### Le mode invisible
-1. Tu es ADMIN
-2. Clique sur 👁️ dans le header → icône passe en 👁️‍🗨️ ambre
-3. Ouvre un 2e navigateur (navigation privée) avec un user normal
-4. Dans le 2e navigateur, va sur `/g/general` → tu ne vois pas ton compte ADMIN dans la sidebar
+```
+prisma/
+├── unread-migration.sql       (migration SQL manuelle si tu préfères pas passer par Prisma)
 
-### Les mentions
-1. Dans un channel, commence un message par `@a` (avec le début d'un autre user)
-2. Suggestions apparaissent → choisis-en un avec Tab ou Entrée
-3. Envoie le message → l'autre user reçoit une notification (cloche 🔔)
+SCHEMA-CHANGES.md              (les modifs à coller dans ton schema.prisma)
 
-### Répondre à un message
-1. Hover sur un message d'un autre → clique ↪
-2. Bandeau "Réponse à..." apparaît
-3. Écris ta réponse, envoie
-4. Le message affiche une citation au-dessus
+src/
+├── app/
+│   ├── (main)/g/[slug]/
+│   │   ├── group-sidebar.tsx         (nouvelle avec badges non-lus)
+│   │   └── c/[channelSlug]/
+│   │       └── chat-view.tsx         (mise à jour : cadeau persisté + scroll-to-read)
+│   └── api/
+│       ├── channels/[id]/
+│       │   ├── messages/route.ts     (inclut isGiftSystem dans le GET)
+│       │   └── mark-read/route.ts    (NOUVELLE : marque comme lu)
+│       ├── groups/[slug]/
+│       │   └── unread/route.ts       (NOUVELLE : compte les non-lus)
+│       └── gifts/route.ts            (persiste le message système en BDD)
+└── lib/
+    └── use-unread.ts                 (hook React pour les non-lus)
+```
 
-### Éditer ton message
-1. Envoie un message
-2. Hover dessus → clique 🖊️
-3. Edite dans la textarea, appuie Entrée
-4. Le message se met à jour en temps réel pour tous
+## 🐛 En cas de problème
 
-### Demande de rejoindre
-1. Avec le compte A : crée un groupe privé
-2. Avec le compte B : va sur `/g/[slug]` → clique "Rejoindre"
-3. Avec le compte A : tu dois voir le badge ambre dans la sidebar
-4. Clique → tu arrives sur `/g/[slug]/requests`
-5. Accepte ou refuse, le compte B reçoit une notification
-
-## ⚠️ Notes
-
-- Si après le patch tu as une erreur Prisma "The table X does not exist", c'est que tu as sauté la migration. Relance `npx prisma migrate dev`
-- Si les mentions ne fonctionnent pas, vérifie que le user mentionné n'est pas invisible
-- Le compteur de présence compte les ADMIN invisibles à 0 (ils n'apparaissent pas dans la liste)
+- **"ChannelReadState does not exist"** → tu as sauté `npx prisma db push`
+- **"Unknown field isGiftSystem"** → pareil, la migration n'est pas passée
+- **Badges non-lus ne s'affichent pas** → vérifie avec F12 → Network l'appel à `/api/groups/[slug]/unread`, la réponse
+- **Les anciens cadeaux d'avant ce patch ne s'affichent plus** → c'est normal, ils n'étaient pas en BDD. Les nouveaux cadeaux fonctionneront.

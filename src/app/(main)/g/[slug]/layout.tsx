@@ -24,13 +24,8 @@ export default async function GroupLayout({ children, params }: LayoutProps) {
         where: { isDeleted: false },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
         select: {
-          id: true,
-          slug: true,
-          name: true,
-          type: true,
-          isSystem: true,
-          isLocked: true,
-          writePermission: true,
+          id: true, slug: true, name: true, type: true,
+          isSystem: true, isLocked: true, writePermission: true,
         },
       },
       memberships: {
@@ -44,7 +39,7 @@ export default async function GroupLayout({ children, params }: LayoutProps) {
 
   const me = await db.user.findUnique({
     where: { id: session.user.id },
-    select: { role: true },
+    select: { role: true, coins: true },
   });
   const isPlatformAdmin = me?.role === "ADMIN";
   const isPlatformMod = me?.role === "MODERATOR";
@@ -56,13 +51,10 @@ export default async function GroupLayout({ children, params }: LayoutProps) {
   const isOwner = group.ownerId === session.user.id;
   const canEditGroup = (isOwner || isPlatformAdmin) && (!group.isSystemGroup || isPlatformAdmin);
 
-  // Si pas membre mais staff plateforme → on affiche quand même (bypass groupes privés)
-  // Si pas membre et pas staff → on affiche juste la page de présentation
   if (!isMember && !isPlatformStaff) {
     return <div className="max-w-4xl mx-auto">{children}</div>;
   }
 
-  // Compter les demandes en attente pour l'affichage du badge
   let pendingRequestsCount = 0;
   if (isOwner || isGroupMod || isPlatformStaff) {
     pendingRequestsCount = await db.groupJoinRequest.count({
@@ -125,7 +117,12 @@ export default async function GroupLayout({ children, params }: LayoutProps) {
 
       <div className="flex-1 flex flex-col min-w-0">{children}</div>
 
-      <MembersSidebar groupId={group.id} groupSlug={group.slug} />
+      <MembersSidebar
+        groupId={group.id}
+        groupSlug={group.slug}
+        currentUserId={session.user.id}
+        currentUserCoins={me?.coins ?? 0}
+      />
     </div>
   );
 }

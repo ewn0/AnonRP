@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatLastSeen, getPresenceStatus, presenceLabel, presenceDotClass } from "@/lib/presence";
 import { XpBar } from "@/components/xp-bar";
+import { ProfileGiftsSection } from "@/components/profile-gifts-section";
 
 interface PageProps {
   params: Promise<{ username: string }>;
@@ -32,20 +33,29 @@ export default async function ProfilePage({ params }: PageProps) {
       lastSeenAt: true,
       isBanned: true,
       xpBoostPercent: true,
+      isInvisible: true,
     },
   });
 
   if (!user || user.isBanned) notFound();
 
+  // Les ADMIN invisibles ne sont pas visibles, sauf eux-mêmes ou un autre admin
+  if (user.isInvisible && user.role === "ADMIN" && session?.user?.id !== user.id) {
+    const me = session?.user
+      ? await db.user.findUnique({
+          where: { id: session.user.id },
+          select: { role: true },
+        })
+      : null;
+    if (me?.role !== "ADMIN") notFound();
+  }
+
   const isOwnProfile = session?.user?.id === user.id;
   const initials = (user.displayName || user.username).substring(0, 2).toUpperCase();
-  const status = getPresenceStatus(user.lastSeenAt);
+  const status = user.isInvisible ? "offline" : getPresenceStatus(user.lastSeenAt);
 
   const memberships = await db.groupMembership.findMany({
-    where: {
-      userId: user.id,
-      group: { visibility: "PUBLIC" },
-    },
+    where: { userId: user.id, group: { visibility: "PUBLIC" } },
     take: 10,
     orderBy: { joinedAt: "desc" },
     select: {
@@ -62,7 +72,16 @@ export default async function ProfilePage({ params }: PageProps) {
     },
   });
 
-  // Sérialisation : Next ne sait pas sérialiser BigInt directement dans les props
+  // Si connecté : récupérer mes propres coins pour permettre d'offrir un cadeau
+  let myCoins: number | null = null;
+  if (session?.user && !isOwnProfile) {
+    const me = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { coins: true },
+    });
+    myCoins = me?.coins ?? null;
+  }
+
   const xpAsString = user.xp.toString();
 
   return (
@@ -98,24 +117,24 @@ export default async function ProfilePage({ params }: PageProps) {
                 {status === "online" ? (
                   <span className="text-green-400">En ligne</span>
                 ) : (
-                  <>{presenceLabel(status)} · {formatLastSeen(user.lastSeenAt)}</>
+                  <>{presenceLabel(status)} {!user.isInvisible && <>· {formatLastSeen(user.lastSeenAt)}</>}</>
                 )}
               </p>
             </div>
 
             {isOwnProfile && (
-              <Link href="/settings" className="text-xs text-primary hover:underline pb-2 shrink-0">
-                Modifier
-              </Link>
+              <div className="flex gap-2 pb-2 shrink-0">
+                <Link href="/settings" className="text-xs text-primary hover:underline">
+                  Modifier
+                </Link>
+              </div>
             )}
           </div>
 
-          {/* Barre XP */}
           <div className="mt-6 p-4 rounded-lg bg-muted/30 border border-border/50">
             <XpBar level={user.level} xp={xpAsString} />
           </div>
 
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mt-4">
             <StatBlock label="Niveau" value={user.level.toString()} />
             <StatBlock label="AnonCoins" value={user.coins.toLocaleString()} />
@@ -133,37 +152,28 @@ export default async function ProfilePage({ params }: PageProps) {
 
           <div className="flex flex-wrap gap-2 mt-6">
             {user.role === "ADMIN" && (
-              <span className="px-2 py-1 rounded-full text-xs bg-destructive/20 text-destructive border border-destructive/30">
-                Admin
-              </span>
+              <span className="px-2 py-1 rounded-full text-xs bg-destructive/20 text-destructive border border-destructive/30">Admin</span>
             )}
             {user.role === "MODERATOR" && (
-              <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                Modérateur
-              </span>
+              <span className="px-2 py-1 rounded-full text-xs bg-blue-500/20 text-blue-400 border border-blue-500/30">Modérateur</span>
             )}
             {user.premiumTier === "GOLD" && (
-              <span className="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                ⭐ Gold
-              </span>
+              <span className="px-2 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">⭐ Gold</span>
             )}
             {user.premiumTier === "SILVER" && (
-              <span className="px-2 py-1 rounded-full text-xs bg-gray-400/20 text-gray-300 border border-gray-400/30">
-                🥈 Argent
-              </span>
+              <span className="px-2 py-1 rounded-full text-xs bg-gray-400/20 text-gray-300 border border-gray-400/30">🥈 Argent</span>
             )}
             {user.premiumTier === "BRONZE" && (
-              <span className="px-2 py-1 rounded-full text-xs bg-orange-700/20 text-orange-400 border border-orange-700/30">
-                🥉 Bronze
-              </span>
+              <span className="px-2 py-1 rounded-full text-xs bg-orange-700/20 text-orange-400 border border-orange-700/30">🥉 Bronze</span>
             )}
             {user.xpBoostPercent > 0 && (
               <span className="px-2 py-1 rounded-full text-xs bg-primary/20 text-primary border border-primary/30">
-                +{user.xpBoostPercent.toFixed(2)}% XP 🎁
+                +{(user.xpBoostPercent * 100).toFixed(1)}% XP 🎁
               </span>
             )}
           </div>
 
+          {/* Groupes */}
           {memberships.length > 0 && (
             <div className="mt-6">
               <h3 className="text-sm font-semibold mb-3">Groupes rejoints</h3>
@@ -187,8 +197,15 @@ export default async function ProfilePage({ params }: PageProps) {
             </div>
           )}
 
-          <div className="mt-6 p-4 rounded-lg border border-dashed border-border/50 text-center text-sm text-muted-foreground">
-            Les cadeaux reçus apparaîtront ici (Phase 3)
+          {/* Section cadeaux reçus + bouton offrir */}
+          <div className="mt-6 p-4 rounded-lg border border-border/50">
+            <ProfileGiftsSection
+              receiverId={user.id}
+              receiverUsername={user.username}
+              receiverDisplayName={user.displayName}
+              currentUserCoins={myCoins}
+              isOwnProfile={isOwnProfile}
+            />
           </div>
         </CardContent>
       </Card>

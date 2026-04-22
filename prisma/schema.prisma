@@ -15,89 +15,93 @@ datasource db {
 // ============================================================
 
 model User {
-  id                String    @id @default(cuid())
-  email             String    @unique
+  channelReadStates ChannelReadState[]
+  id                String             @id @default(cuid())
+  email             String             @unique
   emailVerified     DateTime?
-  username          String    @unique
+  username          String             @unique
   passwordHash      String
 
-  displayName       String?
-  bio               String?   @db.VarChar(500)
-  avatarUrl         String?
-  bannerUrl         String?
+  displayName String?
+  bio         String? @db.VarChar(500)
+  avatarUrl   String?
+  bannerUrl   String?
 
-  isAdult           Boolean   @default(false)
-  role              UserRole  @default(MEMBER)
-  isBanned          Boolean   @default(false)
-  banReason         String?
-  bannedAt          DateTime?
-  bannedByUserId    String?
+  isAdult        Boolean   @default(false)
+  role           UserRole  @default(MEMBER)
+  isBanned       Boolean   @default(false)
+  banReason      String?
+  bannedAt       DateTime?
+  bannedByUserId String?
 
-  coins             Int       @default(0)
-  totalCoinsEarned  BigInt    @default(0)
-  level             Int       @default(1)
-  xp                BigInt    @default(0)
-  xpBoostPercent    Float     @default(0)
+  coins            Int    @default(0)
+  totalCoinsEarned BigInt @default(0)
+  level            Int    @default(1)
+  xp               BigInt @default(0)
+  xpBoostPercent   Float  @default(0)
 
-  friendLimit       Int       @default(10)
+  friendLimit Int @default(10)
 
-  premiumTier       PremiumTier?
-  premiumUntil      DateTime?
+  premiumTier  PremiumTier?
+  premiumUntil DateTime?
 
-  discordId         String?   @unique
-  discordUsername   String?
+  discordId       String? @unique
+  discordUsername String?
 
-  totpSecret        String?
-  twoFactorEnabled  Boolean   @default(false)
+  totpSecret       String?
+  twoFactorEnabled Boolean @default(false)
 
-  isInvisible       Boolean   @default(false)
+  isInvisible Boolean @default(false)
 
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-  lastSeenAt        DateTime  @default(now())
-  lastMessageAt     DateTime?
-  lastCoinEarnedAt  DateTime?
-  messagesToNextCoin Int      @default(10)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastSeenAt         DateTime  @default(now())
+  lastMessageAt      DateTime?
+  lastCoinEarnedAt   DateTime?
+  messagesToNextCoin Int       @default(10)
 
-  sessions              Session[]
-  accounts              Account[]
-  verificationTokens    VerificationRequest[]
+  sessions           Session[]
+  accounts           Account[]
+  verificationTokens VerificationRequest[]
 
-  ownedGroups           Group[]             @relation("GroupOwner")
-  groupMemberships      GroupMembership[]
-  groupJoinRequestsMade GroupJoinRequest[]  @relation("JoinRequestUser")
+  ownedGroups             Group[]                  @relation("GroupOwner")
+  groupMemberships        GroupMembership[]
+  groupJoinRequestsMade   GroupJoinRequest[]       @relation("JoinRequestUser")
   groupNameChangeRequests GroupNameChangeRequest[] @relation("NameChangeRequester")
-  channelMessages       ChannelMessage[]    @relation("ChannelMessageAuthor")
-  channelMessagesDeleted ChannelMessage[]   @relation("ChannelMessageDeletedBy")
-  channelMentions       ChannelMessageMention[] @relation("MentionedUser")
+  channelMessages         ChannelMessage[]         @relation("ChannelMessageAuthor")
+  channelMessagesDeleted  ChannelMessage[]         @relation("ChannelMessageDeletedBy")
+  channelMentions         ChannelMessageMention[]  @relation("MentionedUser")
 
-  sentMessages          Message[]           @relation("MessageSender")
-  receivedMessages      Message[]           @relation("MessageReceiver")
+  sentMessages     Message[] @relation("MessageSender")
+  receivedMessages Message[] @relation("MessageReceiver")
 
-  sentFriendRequests    FriendRequest[]     @relation("FriendRequestFrom")
-  receivedFriendRequests FriendRequest[]    @relation("FriendRequestTo")
-  friendshipsA          Friendship[]        @relation("FriendshipUserA")
-  friendshipsB          Friendship[]        @relation("FriendshipUserB")
+  sentFriendRequests     FriendRequest[] @relation("FriendRequestFrom")
+  receivedFriendRequests FriendRequest[] @relation("FriendRequestTo")
+  friendshipsA           Friendship[]    @relation("FriendshipUserA")
+  friendshipsB           Friendship[]    @relation("FriendshipUserB")
 
-  giftsSent             Gift[]              @relation("GiftSender")
-  giftsReceived         Gift[]              @relation("GiftReceiver")
+  giftsSent     Gift[] @relation("GiftSender")
+  giftsReceived Gift[] @relation("GiftReceiver")
 
-  purchases             Purchase[]
-  coinTransactions      CoinTransaction[]
-  ownedEmojis           UserEmoji[]
+  purchases        Purchase[]
+  coinTransactions CoinTransaction[]
+  ownedEmojis      UserEmoji[]
 
-  reportsMade           Report[]            @relation("ReportedBy")
-  reportsReceived       Report[]            @relation("ReportedUser")
+  reportsMade     Report[] @relation("ReportedBy")
+  reportsReceived Report[] @relation("ReportedUser")
 
-  auditLogsActions      AuditLog[]          @relation("AuditActor")
+  auditLogsActions AuditLog[] @relation("AuditActor")
 
-  banAppeals            BanAppeal[]
+  banAppeals BanAppeal[]
 
-  systemNotifications   SystemNotification[]
+  systemNotifications SystemNotification[]
 
-  groupDeletionRequests GroupDeletionRequest[] @relation("DeletionRequester")
+  groupDeletionRequests GroupDeletionRequest[]   @relation("DeletionRequester")
   groupTransfersFrom    GroupOwnershipTransfer[] @relation("TransferFrom")
   groupTransfersTo      GroupOwnershipTransfer[] @relation("TransferTo")
+
+  notificationPreferences UserNotificationPreferences?
+  giftsCancelled          Gift[]                       @relation("GiftCancelledBy")
 
   @@index([email])
   @@index([username])
@@ -145,13 +149,13 @@ model Session {
 }
 
 model VerificationRequest {
-  id         String   @id @default(cuid())
+  id         String           @id @default(cuid())
   userId     String?
   identifier String
-  token      String   @unique
+  token      String           @unique
   expires    DateTime
   type       VerificationType
-  createdAt  DateTime @default(now())
+  createdAt  DateTime         @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -169,59 +173,59 @@ enum VerificationType {
 // ============================================================
 
 model GroupCategory {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  emoji       String?
-  description String?
+  id           String  @id @default(cuid())
+  slug         String  @unique
+  name         String
+  emoji        String?
+  description  String?
   displayOrder Int     @default(0)
-  isActive    Boolean  @default(true)
+  isActive     Boolean @default(true)
 
-  groups      Group[]
+  groups Group[]
 }
 
 model Group {
-  id            String   @id @default(cuid())
-  slug          String   @unique
-  name          String
-  description   String   @db.VarChar(1000)
-  bannerUrl     String?
-  iconUrl       String?
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  name        String
+  description String  @db.VarChar(1000)
+  bannerUrl   String?
+  iconUrl     String?
 
-  ownerId       String
-  owner         User     @relation("GroupOwner", fields: [ownerId], references: [id])
+  ownerId String
+  owner   User   @relation("GroupOwner", fields: [ownerId], references: [id])
 
-  categoryId    String?
-  category      GroupCategory? @relation(fields: [categoryId], references: [id])
+  categoryId String?
+  category   GroupCategory? @relation(fields: [categoryId], references: [id])
 
   visibility    GroupVisibility @default(PUBLIC)
-  isNSFW        Boolean  @default(false)
-  isFeatured    Boolean  @default(false)
+  isNSFW        Boolean         @default(false)
+  isFeatured    Boolean         @default(false)
   featuredUntil DateTime?
 
-  isSystemGroup Boolean  @default(false)
+  isSystemGroup Boolean @default(false)
 
-  memberCount   Int      @default(1)
-  activityScore Float    @default(0)
+  memberCount   Int   @default(1)
+  activityScore Float @default(0)
 
   activeMembersCount24h Int       @default(0)
   activeCountUpdatedAt  DateTime?
 
-  maxTextChannels   Int  @default(5)
-  maxVoiceChannels  Int  @default(2)
+  maxTextChannels  Int @default(5)
+  maxVoiceChannels Int @default(2)
 
-  tags          String[]
+  tags String[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  memberships   GroupMembership[]
-  joinRequests  GroupJoinRequest[]
-  channels      Channel[]
-  bans          GroupBan[]
+  memberships  GroupMembership[]
+  joinRequests GroupJoinRequest[]
+  channels     Channel[]
+  bans         GroupBan[]
 
-  deletionRequests  GroupDeletionRequest[]
-  transfers         GroupOwnershipTransfer[]
+  deletionRequests   GroupDeletionRequest[]
+  transfers          GroupOwnershipTransfer[]
   nameChangeRequests GroupNameChangeRequest[]
 
   @@index([slug])
@@ -237,19 +241,19 @@ enum GroupVisibility {
 }
 
 model GroupMembership {
-  id        String         @id @default(cuid())
-  userId    String
-  groupId   String
-  role      GroupRole      @default(MEMBER)
+  id      String    @id @default(cuid())
+  userId  String
+  groupId String
+  role    GroupRole @default(MEMBER)
 
   mutedUntil DateTime?
   nickname   String?
 
-  joinedAt  DateTime       @default(now())
-  lastReadAt DateTime      @default(now())
+  joinedAt   DateTime @default(now())
+  lastReadAt DateTime @default(now())
 
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  group     Group          @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([userId, groupId])
   @@index([groupId, role])
@@ -262,17 +266,17 @@ enum GroupRole {
 }
 
 model GroupJoinRequest {
-  id         String   @id @default(cuid())
+  id         String            @id @default(cuid())
   groupId    String
   userId     String
-  message    String?  @db.VarChar(300)
+  message    String?           @db.VarChar(300)
   status     JoinRequestStatus @default(PENDING)
   reviewedBy String?
   reviewedAt DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime          @default(now())
 
-  group      Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  user       User     @relation("JoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation("JoinRequestUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
   @@index([groupId, status])
@@ -293,30 +297,30 @@ model GroupBan {
   bannedBy  String
   createdAt DateTime @default(now())
 
-  group     Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
 
   @@unique([groupId, userId])
 }
 
 model GroupNameChangeRequest {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   groupId       String
   requestedById String
-  currentName   String   @db.VarChar(50)
-  proposedName  String   @db.VarChar(50)
+  currentName   String  @db.VarChar(50)
+  proposedName  String  @db.VarChar(50)
   currentSlug   String?
   proposedSlug  String?
-  reason        String?  @db.VarChar(500)
+  reason        String? @db.VarChar(500)
 
-  status        NameChangeStatus @default(PENDING)
-  reviewedById  String?
-  reviewedAt    DateTime?
-  reviewNote    String?
+  status       NameChangeStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  requester     User     @relation("NameChangeRequester", fields: [requestedById], references: [id])
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester User  @relation("NameChangeRequester", fields: [requestedById], references: [id])
 
   @@index([status, createdAt])
   @@index([groupId])
@@ -334,27 +338,29 @@ enum NameChangeStatus {
 // ============================================================
 
 model Channel {
-  id          String       @id @default(cuid())
-  groupId     String
-  name        String       @db.VarChar(50)
-  slug        String       @db.VarChar(50)
-  description String?      @db.VarChar(200)
-  type        ChannelType  @default(TEXT)
+  channelReadStates ChannelReadState[]
+  id                String             @id @default(cuid())
+  groupId           String
+  name              String             @db.VarChar(50)
+  slug              String             @db.VarChar(50)
+  description       String?            @db.VarChar(200)
+  type              ChannelType        @default(TEXT)
 
-  position    Int          @default(0)
+  position Int @default(0)
 
-  isSystem    Boolean      @default(false)
+  isSystem Boolean @default(false)
 
   writePermission ChannelWritePermission @default(MEMBERS)
 
-  isLocked    Boolean      @default(false)
-  isDeleted   Boolean      @default(false)
+  isLocked  Boolean @default(false)
+  isDeleted Boolean @default(false)
 
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  group       Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  messages    ChannelMessage[]
+  group         Group            @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  messages      ChannelMessage[]
+  giftsReceived Gift[]
 
   @@unique([groupId, slug])
   @@index([groupId, position])
@@ -373,34 +379,34 @@ enum ChannelWritePermission {
 }
 
 model ChannelMessage {
-  id         String   @id @default(cuid())
-  channelId  String
-  authorId   String
+  id        String @id @default(cuid())
+  channelId String
+  authorId  String
+  isGiftSystem Boolean @default(false)
+  content String @db.Text
 
-  content    String   @db.Text
+  replyToId String?
+  replyTo   ChannelMessage?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies   ChannelMessage[] @relation("MessageReply")
 
-  replyToId  String?
-  replyTo    ChannelMessage?  @relation("MessageReply", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies    ChannelMessage[] @relation("MessageReply")
+  isEdited Boolean   @default(false)
+  editedAt DateTime?
 
-  isEdited   Boolean  @default(false)
-  editedAt   DateTime?
-
-  isDeleted  Boolean  @default(false)
-  deletedById String?
-  deletedBy   User?   @relation("ChannelMessageDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
-  deletedAt   DateTime?
-  deletedReason String? @db.VarChar(300)
+  isDeleted     Boolean   @default(false)
+  deletedById   String?
+  deletedBy     User?     @relation("ChannelMessageDeletedBy", fields: [deletedById], references: [id], onDelete: SetNull)
+  deletedAt     DateTime?
+  deletedReason String?   @db.VarChar(300)
 
   countsForCoins Boolean @default(true)
 
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  channel    Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  author     User     @relation("ChannelMessageAuthor", fields: [authorId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  author  User    @relation("ChannelMessageAuthor", fields: [authorId], references: [id])
 
-  mentions   ChannelMessageMention[]
+  mentions ChannelMessageMention[]
 
   @@index([channelId, createdAt])
   @@index([authorId, createdAt])
@@ -413,8 +419,8 @@ model ChannelMessageMention {
   mentionedUserId String
   createdAt       DateTime @default(now())
 
-  message         ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user            User           @relation("MentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+  message ChannelMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User           @relation("MentionedUser", fields: [mentionedUserId], references: [id], onDelete: Cascade)
 
   @@unique([messageId, mentionedUserId])
   @@index([mentionedUserId])
@@ -425,20 +431,20 @@ model ChannelMessageMention {
 // ============================================================
 
 model GroupDeletionRequest {
-  id            String   @id @default(cuid())
+  id            String  @id @default(cuid())
   groupId       String
   requestedById String
-  reason        String?  @db.VarChar(500)
+  reason        String? @db.VarChar(500)
 
-  status        DeletionStatus @default(PENDING)
-  reviewedById  String?
-  reviewedAt    DateTime?
-  reviewNote    String?
+  status       DeletionStatus @default(PENDING)
+  reviewedById String?
+  reviewedAt   DateTime?
+  reviewNote   String?
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  group         Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  requester     User     @relation("DeletionRequester", fields: [requestedById], references: [id])
+  group     Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  requester User  @relation("DeletionRequester", fields: [requestedById], references: [id])
 
   @@index([status])
 }
@@ -451,17 +457,17 @@ enum DeletionStatus {
 }
 
 model GroupOwnershipTransfer {
-  id           String   @id @default(cuid())
-  groupId      String
-  fromUserId   String
-  toUserId     String
-  status       TransferStatus @default(PENDING)
-  createdAt    DateTime @default(now())
-  respondedAt  DateTime?
+  id          String         @id @default(cuid())
+  groupId     String
+  fromUserId  String
+  toUserId    String
+  status      TransferStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  respondedAt DateTime?
 
-  group        Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  fromUser     User     @relation("TransferFrom", fields: [fromUserId], references: [id])
-  toUser       User     @relation("TransferTo", fields: [toUserId], references: [id])
+  group    Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fromUser User  @relation("TransferFrom", fields: [fromUserId], references: [id])
+  toUser   User  @relation("TransferTo", fields: [toUserId], references: [id])
 
   @@index([groupId, status])
   @@index([toUserId, status])
@@ -479,17 +485,17 @@ enum TransferStatus {
 // ============================================================
 
 model SystemNotification {
-  id         String   @id @default(cuid())
-  userId     String
-  type       NotificationType
-  title      String   @db.VarChar(200)
-  content    String   @db.Text
-  linkUrl    String?
-  metadata   Json?
-  readAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String           @db.VarChar(200)
+  content   String           @db.Text
+  linkUrl   String?
+  metadata  Json?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
 
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt])
   @@index([userId, createdAt])
@@ -525,16 +531,16 @@ enum NotificationType {
 // ============================================================
 
 model FriendRequest {
-  id         String              @id @default(cuid())
-  fromId     String
-  toId       String
-  status     FriendRequestStatus @default(PENDING)
-  message    String?             @db.VarChar(200)
-  createdAt  DateTime            @default(now())
+  id          String              @id @default(cuid())
+  fromId      String
+  toId        String
+  status      FriendRequestStatus @default(PENDING)
+  message     String?             @db.VarChar(200)
+  createdAt   DateTime            @default(now())
   respondedAt DateTime?
 
-  from       User                @relation("FriendRequestFrom", fields: [fromId], references: [id], onDelete: Cascade)
-  to         User                @relation("FriendRequestTo", fields: [toId], references: [id], onDelete: Cascade)
+  from User @relation("FriendRequestFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User @relation("FriendRequestTo", fields: [toId], references: [id], onDelete: Cascade)
 
   @@unique([fromId, toId])
 }
@@ -552,34 +558,34 @@ model Friendship {
   userBId   String
   createdAt DateTime @default(now())
 
-  userA     User     @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
-  userB     User     @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  userA User @relation("FriendshipUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userB User @relation("FriendshipUserB", fields: [userBId], references: [id], onDelete: Cascade)
 
   @@unique([userAId, userBId])
 }
 
 model Conversation {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  messages  Message[]
+  messages Message[]
 }
 
 model Message {
-  id             String       @id @default(cuid())
+  id             String    @id @default(cuid())
   conversationId String
   senderId       String
   receiverId     String
-  content        String       @db.Text
+  content        String    @db.Text
   readAt         DateTime?
-  isDeleted      Boolean      @default(false)
-  isSystem       Boolean      @default(false)
-  createdAt      DateTime     @default(now())
+  isDeleted      Boolean   @default(false)
+  isSystem       Boolean   @default(false)
+  createdAt      DateTime  @default(now())
 
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
-  receiver       User         @relation("MessageReceiver", fields: [receiverId], references: [id])
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
+  receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id])
 
   @@index([conversationId, createdAt])
   @@index([receiverId, readAt])
@@ -598,7 +604,7 @@ model CoinTransaction {
   metadata  Json?
   createdAt DateTime            @default(now())
 
-  user      User                @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([type])
@@ -620,33 +626,45 @@ enum CoinTransactionType {
 }
 
 model GiftType {
-  id            String  @id @default(cuid())
-  slug          String  @unique
-  name          String
-  description   String?
-  iconUrl       String
-  costCoins     Int
+  id             String  @id @default(cuid())
+  slug           String  @unique
+  name           String
+  description    String?
+  iconUrl        String
+  costCoins      Int
   xpBoostPercent Float
-  displayOrder  Int     @default(0)
-  isActive      Boolean @default(true)
+  displayOrder   Int     @default(0)
+  isActive       Boolean @default(true)
 
-  gifts         Gift[]
+  gifts Gift[]
 }
 
 model Gift {
-  id          String    @id @default(cuid())
-  giftTypeId  String
-  senderId    String
-  receiverId  String
-  message     String?   @db.VarChar(200)
-  createdAt   DateTime  @default(now())
+  id         String  @id @default(cuid())
+  giftTypeId String
+  senderId   String
+  receiverId String
+  message    String? @db.VarChar(200)
 
-  giftType    GiftType  @relation(fields: [giftTypeId], references: [id])
-  sender      User      @relation("GiftSender", fields: [senderId], references: [id])
-  receiver    User      @relation("GiftReceiver", fields: [receiverId], references: [id])
+  // Si le cadeau est envoyé depuis un channel, on le trace ici
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
 
-  @@index([receiverId])
-  @@index([senderId])
+  // Gestion annulation (admin seulement, 24h max)
+  cancelledAt       DateTime?
+  cancelledByUserId String?
+  cancelledBy       User?     @relation("GiftCancelledBy", fields: [cancelledByUserId], references: [id], onDelete: SetNull)
+  isRefunded        Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+
+  giftType GiftType @relation(fields: [giftTypeId], references: [id])
+  sender   User     @relation("GiftSender", fields: [senderId], references: [id])
+  receiver User     @relation("GiftReceiver", fields: [receiverId], references: [id])
+
+  @@index([receiverId, createdAt])
+  @@index([senderId, createdAt])
+  @@index([channelId])
 }
 
 model StoreItem {
@@ -661,7 +679,7 @@ model StoreItem {
   isActive    Boolean       @default(true)
   createdAt   DateTime      @default(now())
 
-  userEmojis  UserEmoji[]
+  userEmojis UserEmoji[]
 }
 
 enum StoreItemType {
@@ -676,70 +694,70 @@ enum StoreItemType {
 }
 
 model UserEmoji {
-  id         String    @id @default(cuid())
-  userId     String
+  id          String   @id @default(cuid())
+  userId      String
   storeItemId String
-  acquiredAt DateTime  @default(now())
+  acquiredAt  DateTime @default(now())
 
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  storeItem  StoreItem @relation(fields: [storeItemId], references: [id])
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  storeItem StoreItem @relation(fields: [storeItemId], references: [id])
 
   @@unique([userId, storeItemId])
 }
 
 model CoinPack {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  name        String
-  coinAmount  Int
-  bonusCoins  Int      @default(0)
-  priceCents  Int
+  id           String  @id @default(cuid())
+  slug         String  @unique
+  name         String
+  coinAmount   Int
+  bonusCoins   Int     @default(0)
+  priceCents   Int
   displayOrder Int     @default(0)
-  isActive    Boolean  @default(true)
+  isActive     Boolean @default(true)
 
-  purchases   Purchase[]
+  purchases Purchase[]
 }
 
 model PremiumPlan {
-  id            String      @id @default(cuid())
-  tier          PremiumTier @unique
-  name          String
-  monthlyCoins  Int
+  id             String      @id @default(cuid())
+  tier           PremiumTier @unique
+  name           String
+  monthlyCoins   Int
   xpBoostPercent Float
-  priceCents    Int
-  discordRoleId String?
-  stripePriceId String?
-  isActive      Boolean     @default(true)
+  priceCents     Int
+  discordRoleId  String?
+  stripePriceId  String?
+  isActive       Boolean     @default(true)
 
-  purchases     Purchase[]
+  purchases Purchase[]
 }
 
 model Purchase {
-  id              String         @id @default(cuid())
-  userId          String
-  type            PurchaseType
-  status          PurchaseStatus @default(PENDING)
+  id     String         @id @default(cuid())
+  userId String
+  type   PurchaseType
+  status PurchaseStatus @default(PENDING)
 
-  amountCents     Int
-  currency        String         @default("EUR")
+  amountCents Int
+  currency    String @default("EUR")
 
-  coinPackId      String?
-  premiumPlanId   String?
+  coinPackId    String?
+  premiumPlanId String?
 
-  stripeSessionId String?        @unique
-  stripePaymentIntentId String?  @unique
+  stripeSessionId       String? @unique
+  stripePaymentIntentId String? @unique
 
-  invoiceNumber   String?        @unique
-  billingCountry  String?
-  vatRate         Float?
-  vatAmountCents  Int?
+  invoiceNumber  String? @unique
+  billingCountry String?
+  vatRate        Float?
+  vatAmountCents Int?
 
-  createdAt       DateTime       @default(now())
-  completedAt     DateTime?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
 
-  user            User           @relation(fields: [userId], references: [id])
-  coinPack        CoinPack?      @relation(fields: [coinPackId], references: [id])
-  premiumPlan     PremiumPlan?   @relation(fields: [premiumPlanId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+  coinPack    CoinPack?    @relation(fields: [coinPackId], references: [id])
+  premiumPlan PremiumPlan? @relation(fields: [premiumPlanId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -763,29 +781,29 @@ enum PurchaseStatus {
 // ============================================================
 
 model Report {
-  id              String       @id @default(cuid())
-  reporterId      String
-  reportedUserId  String?
+  id             String  @id @default(cuid())
+  reporterId     String
+  reportedUserId String?
 
-  targetType      ReportTargetType
-  targetId        String
+  targetType ReportTargetType
+  targetId   String
 
-  reason          ReportReason
-  description     String?      @db.VarChar(1000)
+  reason      ReportReason
+  description String?      @db.VarChar(1000)
 
-  status          ReportStatus @default(PENDING)
+  status ReportStatus @default(PENDING)
 
   handledByUserId String?
   handledAt       DateTime?
   resolution      String?
 
   discordMessageId String?
-  transcriptUrl   String?
+  transcriptUrl    String?
 
-  createdAt       DateTime     @default(now())
+  createdAt DateTime @default(now())
 
-  reporter        User         @relation("ReportedBy", fields: [reporterId], references: [id])
-  reportedUser    User?        @relation("ReportedUser", fields: [reportedUserId], references: [id])
+  reporter     User  @relation("ReportedBy", fields: [reporterId], references: [id])
+  reportedUser User? @relation("ReportedUser", fields: [reportedUserId], references: [id])
 
   @@index([status])
   @@index([createdAt])
@@ -820,16 +838,16 @@ enum ReportStatus {
 }
 
 model BanAppeal {
-  id          String        @id @default(cuid())
-  userId      String
-  reason      String        @db.Text
-  status      AppealStatus  @default(PENDING)
-  reviewedBy  String?
-  reviewedAt  DateTime?
-  response    String?       @db.Text
-  createdAt   DateTime      @default(now())
+  id         String       @id @default(cuid())
+  userId     String
+  reason     String       @db.Text
+  status     AppealStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+  response   String?      @db.Text
+  createdAt  DateTime     @default(now())
 
-  user        User          @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 
   @@index([status])
 }
@@ -841,16 +859,16 @@ enum AppealStatus {
 }
 
 model AuditLog {
-  id          String   @id @default(cuid())
-  actorId     String
-  action      String
-  targetType  String?
-  targetId    String?
-  metadata    Json?
-  ipAddress   String?
-  createdAt   DateTime @default(now())
+  id         String   @id @default(cuid())
+  actorId    String
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
 
-  actor       User     @relation("AuditActor", fields: [actorId], references: [id])
+  actor User @relation("AuditActor", fields: [actorId], references: [id])
 
   @@index([actorId, createdAt])
   @@index([action])
@@ -862,13 +880,49 @@ model AppConfig {
   updatedAt DateTime @updatedAt
 }
 
+// ============================================================
+// PRÉFÉRENCES DE NOTIFICATIONS
+// ============================================================
+
+model UserNotificationPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+
+  // Toutes désactivées par défaut
+  emailOnMention             Boolean @default(false)
+  emailOnReply               Boolean @default(false)
+  emailOnGiftReceived        Boolean @default(false)
+  emailOnJoinRequestApproved Boolean @default(false)
+  emailOnJoinRequestReceived Boolean @default(false)
+  emailOnMessageDeleted      Boolean @default(false)
+  emailOnReportHandled       Boolean @default(false)
+  emailOnLevelUp             Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model RateLimit {
-  id         String   @id @default(cuid())
-  identifier String
-  action     String
-  count      Int      @default(1)
+  id          String   @id @default(cuid())
+  identifier  String
+  action      String
+  count       Int      @default(1)
   windowStart DateTime @default(now())
 
   @@unique([identifier, action])
   @@index([windowStart])
+}
+
+model ChannelReadState {
+  userId     String
+  channelId  String
+  lastReadAt DateTime
+  lastReadMessageId String?
+
+  user    User    @relation(fields: [userId], references: [id])
+  channel Channel @relation(fields: [channelId], references: [id])
+
+  @@id([userId, channelId])
 }

@@ -1,5 +1,5 @@
 // Routes /api/channels/[id]/messages
-// GET  → historique (avec pagination)
+// GET  → historique (avec pagination) + isGiftSystem
 // POST → envoyer un message (+ gain XP/coins + mentions + reply + Pusher)
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,6 +12,31 @@ import { processMessageReward } from "@/lib/xp";
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
+
+const MESSAGE_SELECT = {
+  id: true,
+  content: true,
+  createdAt: true,
+  isEdited: true,
+  editedAt: true,
+  isDeleted: true,
+  deletedReason: true,
+  replyToId: true,
+  isGiftSystem: true,
+  giftId: true,
+  replyTo: {
+    select: {
+      id: true, content: true, isDeleted: true,
+      author: { select: { username: true, displayName: true } },
+    },
+  },
+  author: {
+    select: {
+      id: true, username: true, displayName: true, avatarUrl: true,
+      level: true, role: true, premiumTier: true,
+    },
+  },
+} as const;
 
 export async function GET(req: NextRequest, { params }: RouteParams) {
   const session = await auth();
@@ -27,15 +52,11 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
   const channel = await db.channel.findUnique({
     where: { id: channelId },
     select: {
-      id: true,
-      isDeleted: true,
+      id: true, isDeleted: true,
       group: {
         select: {
           id: true,
-          memberships: {
-            where: { userId: session.user.id },
-            select: { id: true },
-          },
+          memberships: { where: { userId: session.user.id }, select: { id: true } },
         },
       },
     },
@@ -45,7 +66,14 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Channel introuvable" }, { status: 404 });
   }
 
-  if (channel.group.memberships.length === 0) {
+  // Bypass staff plateforme
+  const platformUser = await db.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  const isPlatformStaff = platformUser?.role === "ADMIN" || platformUser?.role === "MODERATOR";
+
+  if (channel.group.memberships.length === 0 && !isPlatformStaff) {
     return NextResponse.json({ error: "Pas membre" }, { status: 403 });
   }
 
@@ -62,35 +90,7 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     where,
     orderBy: { createdAt: "desc" },
     take: limit,
-    select: {
-      id: true,
-      content: true,
-      createdAt: true,
-      isEdited: true,
-      editedAt: true,
-      isDeleted: true,
-      deletedReason: true,
-      replyToId: true,
-      replyTo: {
-        select: {
-          id: true,
-          content: true,
-          isDeleted: true,
-          author: { select: { username: true, displayName: true } },
-        },
-      },
-      author: {
-        select: {
-          id: true,
-          username: true,
-          displayName: true,
-          avatarUrl: true,
-          level: true,
-          role: true,
-          premiumTier: true,
-        },
-      },
-    },
+    select: MESSAGE_SELECT,
   });
 
   return NextResponse.json({ messages: messages.reverse() });
@@ -101,14 +101,11 @@ const postSchema = z.object({
   replyToId: z.string().optional(),
 });
 
-// Extrait les mentions @username du contenu
 function extractMentions(content: string): string[] {
   const matches = content.matchAll(/@([a-zA-Z0-9_-]{3,20})/g);
   const usernames = new Set<string>();
-  for (const m of matches) {
-    usernames.add(m[1]);
-  }
-  return Array.from(usernames).slice(0, 10); // Max 10 mentions
+  for (const m of matches) usernames.add(m[1]);
+  return Array.from(usernames).slice(0, 10);
 }
 
 export async function POST(req: NextRequest, { params }: RouteParams) {
@@ -121,25 +118,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const body = await req.json().catch(() => null);
   const parsed = postSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: "Message invalide", details: parsed.error.flatten() },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Message invalide" }, { status: 400 });
   }
 
   const channel = await db.channel.findUnique({
     where: { id: channelId },
     select: {
-      id: true,
-      isDeleted: true,
-      isLocked: true,
-      writePermission: true,
-      groupId: true,
+      id: true, isDeleted: true, isLocked: true, writePermission: true, groupId: true,
       group: {
         select: {
-          id: true,
-          name: true,
-          slug: true,
+          id: true, name: true, slug: true,
           memberships: {
             where: { userId: session.user.id },
             select: { role: true, mutedUntil: true },
@@ -152,7 +140,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!channel || channel.isDeleted) {
     return NextResponse.json({ error: "Channel introuvable" }, { status: 404 });
   }
-
   if (channel.isLocked) {
     return NextResponse.json({ error: "Channel verrouillé" }, { status: 403 });
   }
@@ -161,7 +148,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   if (!membership) {
     return NextResponse.json({ error: "Pas membre" }, { status: 403 });
   }
-
   if (membership.mutedUntil && membership.mutedUntil > new Date()) {
     return NextResponse.json(
       { error: `Muté jusqu'à ${membership.mutedUntil.toLocaleString("fr-FR")}` },
@@ -172,13 +158,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   const platformUser = await db.user.findUnique({
     where: { id: session.user.id },
     select: {
-      role: true,
-      isBanned: true,
-      username: true,
-      displayName: true,
-      avatarUrl: true,
-      level: true,
-      premiumTier: true,
+      role: true, isBanned: true, username: true, displayName: true,
+      avatarUrl: true, level: true, premiumTier: true,
     },
   });
 
@@ -196,16 +177,16 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Réservé aux modérateurs" }, { status: 403 });
   }
 
-  // Vérifier replyToId
-  let replyToData: { authorId: string; content: string; authorUsername: string; authorDisplayName: string | null } | null = null;
+  let replyToData: {
+    authorId: string; content: string;
+    authorUsername: string; authorDisplayName: string | null;
+  } | null = null;
+
   if (parsed.data.replyToId) {
     const replyTarget = await db.channelMessage.findUnique({
       where: { id: parsed.data.replyToId },
       select: {
-        channelId: true,
-        isDeleted: true,
-        authorId: true,
-        content: true,
+        channelId: true, isDeleted: true, authorId: true, content: true,
         author: { select: { username: true, displayName: true } },
       },
     });
@@ -221,8 +202,6 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
   }
 
   const content = parsed.data.content.trim();
-
-  // Chercher les mentions @user
   const mentionedUsernames = extractMentions(content);
   const mentionedUsers = mentionedUsernames.length > 0
     ? await db.user.findMany({
@@ -234,54 +213,41 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       })
     : [];
 
-  // Créer le message + mentions + notifications en transaction
   const { message, reward, mentionEntries } = await db.$transaction(async (tx) => {
     const msg = await tx.channelMessage.create({
       data: {
-        channelId,
-        authorId: session.user.id,
-        content,
+        channelId, authorId: session.user.id, content,
         replyToId: parsed.data.replyToId,
       },
       select: {
-        id: true,
-        content: true,
-        createdAt: true,
-        isEdited: true,
-        replyToId: true,
+        id: true, content: true, createdAt: true,
+        isEdited: true, replyToId: true, isGiftSystem: true, giftId: true,
       },
     });
 
-    // Mentions (ne se mentionne pas soi-même)
     const mentionEntries = mentionedUsers.filter((u) => u.id !== session.user.id);
     if (mentionEntries.length > 0) {
       await tx.channelMessageMention.createMany({
         data: mentionEntries.map((u) => ({
-          messageId: msg.id,
-          mentionedUserId: u.id,
+          messageId: msg.id, mentionedUserId: u.id,
         })),
         skipDuplicates: true,
       });
 
-      // Notifications mention
       await tx.systemNotification.createMany({
         data: mentionEntries.map((u) => ({
-          userId: u.id,
-          type: "MESSAGE_MENTION" as const,
+          userId: u.id, type: "MESSAGE_MENTION" as const,
           title: `${platformUser.displayName || platformUser.username} t'a mentionné(e)`,
           content: content.slice(0, 200),
           linkUrl: `/g/${channel.group.slug}`,
           metadata: {
-            channelId,
-            groupId: channel.groupId,
-            messageId: msg.id,
+            channelId, groupId: channel.groupId, messageId: msg.id,
             fromUsername: platformUser.username,
           },
         })),
       });
     }
 
-    // Notification reply (si l'auteur original n'est pas moi et n'est pas déjà mentionné)
     if (replyToData && replyToData.authorId !== session.user.id) {
       const alreadyMentioned = mentionEntries.some((m) => m.id === replyToData!.authorId);
       if (!alreadyMentioned) {
@@ -293,9 +259,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
             content: content.slice(0, 200),
             linkUrl: `/g/${channel.group.slug}`,
             metadata: {
-              channelId,
-              groupId: channel.groupId,
-              messageId: msg.id,
+              channelId, groupId: channel.groupId, messageId: msg.id,
               fromUsername: platformUser.username,
             },
           },
@@ -303,18 +267,15 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // Activity score
     await tx.group.update({
       where: { id: channel.groupId },
       data: { activityScore: { increment: 0.5 } },
     });
 
     const reward = await processMessageReward(session.user.id, content, tx);
-
     return { message: msg, reward, mentionEntries };
   });
 
-  // Broadcast
   const messageForBroadcast = {
     ...message,
     author: {

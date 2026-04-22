@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, forwardRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useCallback } from "react";
 import { usePusherChannel } from "@/lib/pusher-client";
 import { UserAvatar, UserNameLink } from "@/components/user-avatar";
 
@@ -30,6 +30,8 @@ interface Message {
   replyToId: string | null;
   isDeleted?: boolean;
   deletedReason?: string | null;
+  isGiftSystem?: boolean;
+  giftId?: string | null;
   author: Author;
   replyTo?: ReplyTo | null;
 }
@@ -81,12 +83,51 @@ export function ChatView({
   const isPlatformAdmin = currentUserRole === "ADMIN";
   const canModerate = isMod || isPlatformAdmin;
 
+  // ============================================================
+  // AUTO-SCROLL À L'ARRIVÉE DE NOUVEAUX MESSAGES (si déjà en bas)
+  // ============================================================
+  const wasAtBottomRef = useRef(true);
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (wasAtBottomRef.current && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
   }, [messages.length]);
 
   useEffect(() => { if (replyingTo) inputRef.current?.focus(); }, [replyingTo]);
 
+  // ============================================================
+  // MARK-READ quand l'user scrolle en bas (avec debounce 500ms)
+  // ============================================================
+  const markReadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markRead = useCallback(() => {
+    if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    markReadTimerRef.current = setTimeout(() => {
+      fetch(`/api/channels/${channel.id}/mark-read`, { method: "POST" }).catch(() => {});
+    }, 500);
+  }, [channel.id]);
+
+  function onScroll() {
+    if (!scrollRef.current) return;
+    const el = scrollRef.current;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+    wasAtBottomRef.current = atBottom;
+    if (atBottom) markRead();
+  }
+
+  // Mark-read au chargement initial si pas de scroll nécessaire
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (!scrollRef.current) return;
+      const el = scrollRef.current;
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 50;
+      if (atBottom) markRead();
+    }, 300);
+    return () => clearTimeout(t);
+  }, [channel.id, markRead]);
+
+  // ============================================================
+  // PUSHER
+  // ============================================================
   usePusherChannel<Message>(
     `private-channel-${channel.id}`,
     "message:new",
@@ -126,6 +167,7 @@ export function ChatView({
       setMessages((prev) => addUnique(prev, body.message));
       setInput("");
       setReplyingTo(null);
+      wasAtBottomRef.current = true; // on va scroller en bas
 
       if (body.reward?.coinsEarned > 0 || body.reward?.leveledUp) {
         setReward({
@@ -203,7 +245,7 @@ export function ChatView({
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-2">
+      <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto px-4 py-2">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
             Aucun message. Lance la conversation !
@@ -211,8 +253,13 @@ export function ChatView({
         ) : (
           <ul className="space-y-0.5">
             {messages.map((msg, i) => {
+              // MESSAGE SYSTÈME CADEAU (persisté)
+              if (msg.isGiftSystem) {
+                return <GiftSystemLine key={msg.id} message={msg} />;
+              }
+
               const prev = i > 0 ? messages[i - 1] : null;
-              const isSameAuthor = prev && prev.author.id === msg.author.id && !msg.replyTo;
+              const isSameAuthor = prev && !prev.isGiftSystem && prev.author.id === msg.author.id && !msg.replyTo;
               const isSameMinute =
                 prev &&
                 Math.abs(new Date(msg.createdAt).getTime() - new Date(prev.createdAt).getTime()) < 5 * 60 * 1000;
@@ -291,6 +338,28 @@ export function ChatView({
       {reportingMessage && <ReportDialog message={reportingMessage} onClose={() => setReportingMessage(null)} />}
     </>
   );
+}
+
+// Le message système cadeau. Le contenu a du markdown basique (**gras**)
+function GiftSystemLine({ message }: { message: Message }) {
+  return (
+    <li className="flex items-center justify-center py-2 my-1 mx-auto max-w-md">
+      <div className="px-4 py-2 rounded-full bg-gradient-to-r from-primary/20 via-purple-500/20 to-pink-500/20 border border-primary/40 text-sm text-center shadow-sm">
+        {renderGiftText(message.content)}
+      </div>
+    </li>
+  );
+}
+
+// Rendu simple du markdown **gras**
+function renderGiftText(content: string) {
+  const parts = content.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (/^\*\*[^*]+\*\*$/.test(part)) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return <span key={i}>{part}</span>;
+  });
 }
 
 function DeletedMessageLine({ author }: { author: Author }) {
@@ -394,13 +463,8 @@ function InlineEditor({ initialValue, onCancel, onSave }: { initialValue: string
   }, []);
 
   function onKey(e: React.KeyboardEvent) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      onCancel();
-    } else if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      onSave(value);
-    }
+    if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+    else if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSave(value); }
   }
 
   return (
@@ -472,29 +536,19 @@ const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(function Me
     const caretPos = el.selectionStart ?? value.length;
     const before = value.slice(0, caretPos);
     const m = before.match(/@([a-zA-Z0-9_-]{0,20})$/);
-    if (m) {
-      setMentionQuery({ query: m[1], atPos: caretPos - m[0].length });
-    } else {
-      setMentionQuery(null);
-      setSuggestions([]);
-    }
+    if (m) setMentionQuery({ query: m[1], atPos: caretPos - m[0].length });
+    else { setMentionQuery(null); setSuggestions([]); }
   }, [value, inputRef]);
 
   useEffect(() => {
-    if (!mentionQuery || mentionQuery.query.length < 1) {
-      setSuggestions([]);
-      return;
-    }
+    if (!mentionQuery || mentionQuery.query.length < 1) { setSuggestions([]); return; }
     let cancelled = false;
     (async () => {
       try {
         const res = await fetch(`/api/groups/${groupSlug}/search-members?q=${encodeURIComponent(mentionQuery.query)}`);
         if (!res.ok) return;
         const data = await res.json();
-        if (!cancelled) {
-          setSuggestions(data.users.slice(0, 6));
-          setSelectedIdx(0);
-        }
+        if (!cancelled) { setSuggestions(data.users.slice(0, 6)); setSelectedIdx(0); }
       } catch {}
     })();
     return () => { cancelled = true; };
@@ -512,21 +566,12 @@ const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(function Me
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (suggestions.length === 0) return;
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelectedIdx((i) => (i + 1) % suggestions.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedIdx((i) => (i - 1 + suggestions.length) % suggestions.length);
-    } else if (e.key === "Tab" || e.key === "Enter") {
+    if (e.key === "ArrowDown") { e.preventDefault(); setSelectedIdx((i) => (i + 1) % suggestions.length); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setSelectedIdx((i) => (i - 1 + suggestions.length) % suggestions.length); }
+    else if (e.key === "Tab" || e.key === "Enter") {
       const sug = suggestions[selectedIdx];
-      if (sug) {
-        e.preventDefault();
-        applySuggestion(sug);
-      }
-    } else if (e.key === "Escape") {
-      setSuggestions([]);
-    }
+      if (sug) { e.preventDefault(); applySuggestion(sug); }
+    } else if (e.key === "Escape") setSuggestions([]);
   }
 
   return (
@@ -547,9 +592,7 @@ const MessageInput = forwardRef<HTMLInputElement, MessageInputProps>(function Me
                   {sug.avatarUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={sug.avatarUrl} alt={sug.username} className="w-full h-full object-cover" />
-                  ) : (
-                    initials
-                  )}
+                  ) : initials}
                 </div>
                 <span className="truncate">
                   <span className="font-semibold">{sug.displayName || sug.username}</span>
@@ -605,8 +648,7 @@ function ReportDialog({ message, onClose }: { message: Message; onClose: () => v
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    setError(null);
+    setSubmitting(true); setError(null);
     try {
       const res = await fetch("/api/reports", {
         method: "POST",
@@ -614,15 +656,10 @@ function ReportDialog({ message, onClose }: { message: Message; onClose: () => v
         body: JSON.stringify({ messageId: message.id, reason, description: description || undefined }),
       });
       const body = await res.json();
-      if (!res.ok) {
-        setError(body.error || "Erreur");
-        return;
-      }
+      if (!res.ok) { setError(body.error || "Erreur"); return; }
       setSuccess(true);
       setTimeout(onClose, 2000);
-    } finally {
-      setSubmitting(false);
-    }
+    } finally { setSubmitting(false); }
   }
 
   return (
@@ -635,7 +672,7 @@ function ReportDialog({ message, onClose }: { message: Message; onClose: () => v
         </div>
         {success ? (
           <div className="p-3 rounded bg-green-600/20 text-green-400 text-sm">
-            ✓ Signalement envoyé. L'équipe va l'examiner.
+            ✓ Signalement envoyé.
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-3">
