@@ -221,7 +221,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       },
       select: {
         id: true, content: true, createdAt: true,
-        isEdited: true, replyToId: true, isGiftSystem: true, giftId: true,
+        isEdited: true, replyToId: true, isGiftSystem: true,
       },
     });
 
