@@ -1,104 +1,251 @@
-# 🩹 Fix cadeaux persistants + Feature non-lus
 
-## ✅ Ce qui est corrigé/ajouté
 
-### 🎁 Bugs cadeaux (les 2 problèmes que tu as vus)
-- **Le message système est maintenant persisté en BDD** dans `ChannelMessage` avec un flag `isGiftSystem`
-- Plus besoin d'être présent pour le voir : en rechargeant la page ou en revenant plus tard, il est toujours là
-- Il compte aussi dans l'historique (pagination, non-lus, etc.)
-- Rendu spécial : message centré avec dégradé violet/rose et texte en gras pour les noms
+# AnonRP
 
-### 🔔 Feature non-lus
-- **Badge à côté du nom du channel** dans la sidebar du groupe
-- **Rouge avec chiffre** si tu as des mentions/replies non lus (ça te concerne directement)
-- **Gris avec chiffre** si juste des messages normaux
-- **99+** si plus de 99
-- **Marqué lu quand tu scrolles en bas du chat** (pas juste en ouvrant la page)
-- Refresh auto toutes les 30s via polling
+Plateforme de jeu de rôle anonyme en français, inspirée de Discord. Les utilisateurs rejoignent des **groupes** thématiques, discutent dans des **channels** en temps réel, gagnent de l'XP et des coins en participant, et peuvent s'offrir des cadeaux virtuels.
 
-## 🚀 Installation
+> **Statut :** en développement actif. Pas encore en production publique.
 
-### 1. Modifier le schema Prisma
+---
 
-⚠️ **Étape critique** — ouvre `SCHEMA-CHANGES.md` dans ce ZIP et suis les 5 modifs à copier-coller dans ton `prisma/schema.prisma`.
+## 🧰 Stack technique
 
-C'est rapide (2 minutes) et je t'ai choisi cette méthode plutôt qu'un schéma complet à écraser pour ne pas perdre tes dernières modifs.
+- **Framework :** Next.js 15 (App Router, Server Components)
+- **Langage :** TypeScript
+- **Base de données :** PostgreSQL (Neon) + Prisma 6
+- **Auth :** NextAuth v5 (email + mot de passe, vérification par email)
+- **UI :** Tailwind CSS + composants custom (thème sombre violet)
+- **Temps réel :** Pusher Channels (chat, présence, notifications)
+- **Emails :** Resend (domaine `anonrp.fr`)
+- **Validation :** Zod
+- **Paiements (prévu) :** Stripe
 
-### 2. Appliquer la migration
+---
 
-```bash
-cd C:\Users\Asala\Desktop\AnonRP
-npx prisma db push
+## ✅ Fonctionnalités implémentées
+
+### Comptes & identité
+- Création de compte avec vérification d'email par lien cliquable (Resend, domaine `anonrp.fr`)
+- Profil utilisateur avec avatar, bio, bannière, niveau, XP, coins, groupes rejoints
+- Statut de présence (en ligne / absent / hors ligne + horodatage de dernière connexion)
+- **Mode invisible pour les admins** (masqués de toutes les listes de membres, même hors ligne)
+
+### Groupes
+- Groupe système « Général » auto-créé, auto-rejoint par tous les nouveaux inscrits
+- Création de groupes par les utilisateurs (niveau 5 minimum + 200 coins)
+- Visibilité publique ou privée (sur invitation / demande à rejoindre)
+- Catégories prédéfinies et tags libres
+- Recherche de groupes par tags
+- Propriétaire + modérateurs + membres avec rôles hiérarchiques
+- Demandes d'adhésion avec validation par l'owner/modos (+ notifications)
+- **Admins et modérateurs plateforme accèdent à tous les groupes** sans restriction
+
+### Channels
+- Channels texte par groupe (limité selon le tier), permissions configurables (lecture seule, modos uniquement, etc.)
+- Channel « Général » auto-créé et non-supprimable pour chaque groupe
+
+### Chat temps réel
+- Envoi de messages via Pusher, diffusion instantanée à tous les membres du channel
+- **Répondre à un message** (citation + notification à l'auteur original)
+- **Mentions `@username`** avec autocomplete en temps réel + notifications
+- **Édition de ses propres messages** dans une fenêtre de 15 minutes
+- Suppression de messages (par l'auteur, les modos de groupe, ou les admins plateforme) — toujours visibles par les modos
+- Gain d'XP et de coins en discutant (avec cooldown et minimum de caractères pour éviter le spam)
+
+### Modération
+- Signalement de messages (9 motifs), avec limite de 5 signalements/heure par utilisateur
+- Impossibilité de se signaler soi-même ou de signaler deux fois la même chose
+- Panneau admin avec retranscription automatique des 50 messages autour du message signalé
+- Bannissement rapide depuis le panneau admin
+- Notifications sur webhook Discord (notif renforcée si 3+ reporters distincts en 1h)
+- Suppression de messages par les modérateurs (notifications automatiques à l'auteur)
+
+### Notifications
+- Cloche 🔔 dans le header avec compteur de non-lues et panneau déroulant
+- Types : mentions, réponses, cadeaux reçus, demandes de groupe acceptées/refusées, messages supprimés, etc.
+- **Préférences par type d'événement pour recevoir aussi un email** (désactivées par défaut, opt-in via `/settings/notifications`)
+
+### Économie & cadeaux
+- Monnaie virtuelle (AnonCoins) gagnée en discutant
+- Système de cadeaux avec boost XP permanent (plafonné à +20% cumulé)
+- Envoi depuis un profil (anonyme) ou depuis un channel (annoncé publiquement via un message système stylisé)
+- Rate limit : 20 cadeaux maximum par heure par utilisateur
+- Annulation administrative possible dans les 24h (remboursement sender + retrait boost receiver)
+
+| Cadeau | Prix 💰 | Boost XP | Quantité pour atteindre la limite max (+20%) |
+|--------|---------:|----------|---------:|
+| 🌹 Rose    |    500 | +0.01%   | 2000 |
+| 🧸 Teddy   |  1 500 | +0.03%   |  667 |
+| ⭐ Étoile  |  2 000 | +0.05%   |  400 |
+| ❤️ Cœur    |  3 000 | +0.08%   |  250 |
+| 💎 Diamant |  5 000 | +0.15%   |  134 |
+| 👑 Couronne| 10 000 | +0.3%    |   67 |
+| 🐉 Dragon  | 25 000 | +0.5%    |   40 |
+
+### Panneau administrateur
+- Gestion des utilisateurs (rôles, bannissements)
+- Traitement des signalements avec contexte complet
+- Gestion des demandes de changement de nom de groupe
+- Annulation des cadeaux récents
+- Audit log de toutes les actions sensibles
+
+---
+
+## 🚧 En cours / à venir
+
+- Messagerie privée (DM) et système d'amis
+- Boutique : achat de coins et abonnements premium via Stripe
+- Bot Discord (synchronisation compte, notifications, rôles)
+- Feed personnalisé avec activités récentes et indicateurs de non-lus
+- Notifications push mobiles
+
+---
+
+## 🛠️ Installation locale
+
+### Prérequis
+
+- Node.js 20+
+- npm ou pnpm
+- Une base PostgreSQL (Neon recommandé pour la simplicité)
+- Un compte Pusher (gratuit jusqu'à 200k messages/jour)
+- Un compte Resend (optionnel — fallback console en dev si non configuré)
+
+### Configuration
+
+Crée un fichier `.env` à la racine :
+
+```env
+# Base de données (ta connection string Neon ou locale)
+DATABASE_URL=""
+
+# Secret pour NextAuth - génère-en un avec : openssl rand -base64 32
+AUTH_SECRET="CHANGE_ME_LONG_RANDOM_STRING"
+
+# URL du site (en local c'est ça)
+NEXTAUTH_URL="http://localhost:3000"
+
+# Email (pour la confirmation de compte) - on utilisera Resend plus tard
+RESEND_API_KEY=""
+EMAIL_FROM="noreply@anonrp.com"
+
+STRIPE_SECRET_KEY=""
+STRIPE_WEBHOOK_SECRET=""
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=""
+
+# --- Discord Bot (Phase 5 - laisse vide pour l'instant) ---
+DISCORD_BOT_TOKEN=""
+DISCORD_GUILD_ID=""
+DISCORD_REPORTS_CHANNEL_ID=""
+DISCORD_CLIENT_ID=""
+DISCORD_CLIENT_SECRET=""
+
+# --- Admin initial (utilisé par le script de seed) ---
+INITIAL_ADMIN_EMAIL="admin@anonrp.local"
+INITIAL_ADMIN_USERNAME="admin"
+INITIAL_ADMIN_PASSWORD="ChangeMe2025!"
+
+PUSHER_APP_ID=""
+PUSHER_SECRET=""
+PUSHER_CLUSTER="eu"
+NEXT_PUBLIC_PUSHER_KEY=""
+NEXT_PUBLIC_PUSHER_CLUSTER="eu"
+
+# Discord whebook pour les reports
+DISCORD_REPORTS_WEBHOOK_URL=""
+
+
+
+# --- Resend (emails) ---
+RESEND_API_KEY="re_iXbcjS3g_5oU1CZ4DGRGkyK9pugHroQCc" 
+EMAIL_FROM="AnonRP <contact@anonrp.fr>"
+
+# Bébou si tu as besoin des clés demande sur discord 
 ```
 
-### 3. Copier les fichiers
-
-Copie `src/` par-dessus ton projet (écrase les fichiers existants).
-
-### 4. Redémarre
+### Lancement
 
 ```bash
-# Ctrl+C pour arrêter npm run dev
+# Installer les dépendances
+npm install
+
+# Migrer la base de données
+npx prisma migrate dev
+
+# Seed (admin + catégories + groupe Général + cadeaux)
+npm run db:seed
+npx tsx prisma/seed-gifts.ts
+
+# Lancer en dev
 npm run dev
 ```
 
-## 🧪 Tests
+L'app est disponible sur [http://localhost:3000](http://localhost:3000).
 
-### Test 1 — Le cadeau persiste (problème 1 corrigé)
-1. Compte A et B dans le même channel
-2. A offre un cadeau à B depuis la sidebar (hover 🎁)
-3. Le message doré apparaît pour les deux
-4. B quitte le channel et y revient → **le message est toujours là** ✅
+### Commandes utiles
 
-### Test 2 — Le cadeau est vu par tous (problème 2 corrigé)
-1. A offre un cadeau à B pendant que C n'est pas dans le channel
-2. C ouvre le channel plus tard → **il voit le message** ✅
+```bash
+# Visualiser la BDD
+npx prisma studio
 
-### Test 3 — Non-lus basiques
-1. Compte A va dans `#général`
-2. Compte B envoie 3 messages dans `#général`
-3. Dans la sidebar de A : badge gris "3" à côté de `#général`
-4. A ouvre le channel, scrolle en bas → badge disparaît ✅
+# Recréer le client Prisma après modif du schema
+npx prisma generate
 
-### Test 4 — Mentions en rouge
-1. Compte B envoie "Salut @A comment tu vas ?" dans `#général`
-2. Dans la sidebar de A : badge **rouge "1"** à côté de `#général` (car A est mentionné)
-3. A ouvre, scrolle en bas → badge disparaît ✅
+# Pousser le schema vers la BDD sans migration (utile en dev)
+npx prisma db push
 
-### Test 5 — Seulement quand on scrolle en bas
-1. 50 messages non lus dans `#général`
-2. A ouvre le channel mais scrolle vers le haut pour lire les anciens
-3. Badge reste affiché
-4. A scrolle jusqu'en bas → badge disparaît ✅
+# Donner à ton compte level 100 + 100k coins (pour tester)
+npx tsx prisma/boost-me.ts
 
-## 📝 Fichiers du ZIP
+# Recalculer les boosts XP après modif de la grille
+npx tsx prisma/recalculate-xp-boosts.ts
+```
+
+---
+L'app est disponible sur [http://localhost:3000](http://localhost:3000).
+
+### Commandes utiles
+
+```bash
+# Visualiser la BDD
+npx prisma studio
+
+# Recréer le client Prisma après modif du schema
+npx prisma generate
+
+# Pousser le schema vers la BDD sans migration (utile en dev)
+npx prisma db push
+
+# Donner à ton compte level 100 + 100k coins (pour tester)
+npx tsx prisma/boost-me.ts
+
+# Recalculer les boosts XP après modif de la grille
+npx tsx prisma/recalculate-xp-boosts.ts
+```
+
+## 📐 Structure du projet
 
 ```
-prisma/
-├── unread-migration.sql       (migration SQL manuelle si tu préfères pas passer par Prisma)
-
-SCHEMA-CHANGES.md              (les modifs à coller dans ton schema.prisma)
-
 src/
 ├── app/
-│   ├── (main)/g/[slug]/
-│   │   ├── group-sidebar.tsx         (nouvelle avec badges non-lus)
-│   │   └── c/[channelSlug]/
-│   │       └── chat-view.tsx         (mise à jour : cadeau persisté + scroll-to-read)
-│   └── api/
-│       ├── channels/[id]/
-│       │   ├── messages/route.ts     (inclut isGiftSystem dans le GET)
-│       │   └── mark-read/route.ts    (NOUVELLE : marque comme lu)
-│       ├── groups/[slug]/
-│       │   └── unread/route.ts       (NOUVELLE : compte les non-lus)
-│       └── gifts/route.ts            (persiste le message système en BDD)
-└── lib/
-    └── use-unread.ts                 (hook React pour les non-lus)
+│   ├── (main)/              # Routes authentifiées (feed, groupes, profils, settings, admin)
+│   │   ├── g/[slug]/        # Pages groupe (layout + channels + demandes)
+│   │   ├── u/[username]/    # Profil utilisateur
+│   │   └── admin/           # Panneau administrateur
+│   ├── api/                 # Routes API
+│   └── (auth)/              # Login, register, reset password
+├── components/              # Composants réutilisables (avatar, cloche, modale cadeau, etc.)
+├── lib/                     # Clients (db, auth, pusher, email, notify), validations Zod
+└── middleware.ts            # Protection des routes
+prisma/
+├── schema.prisma            # Modèle de données
+└── seed-*.ts                # Scripts de seed
 ```
 
-## 🐛 En cas de problème
+---
 
-- **"ChannelReadState does not exist"** → tu as sauté `npx prisma db push`
-- **"Unknown field isGiftSystem"** → pareil, la migration n'est pas passée
-- **Badges non-lus ne s'affichent pas** → vérifie avec F12 → Network l'appel à `/api/groups/[slug]/unread`, la réponse
-- **Les anciens cadeaux d'avant ce patch ne s'affichent plus** → c'est normal, ils n'étaient pas en BDD. Les nouveaux cadeaux fonctionneront.
+## 📄 Licence
+
+Non défini pour l'instant. Tous droits réservés par l'auteur.
+
+
