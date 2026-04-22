@@ -383,6 +383,7 @@ model ChannelMessage {
   channelId String
   authorId  String
   isGiftSystem Boolean @default(false)
+  giftId       String?
   content String @db.Text
 
   replyToId String?
@@ -405,6 +406,7 @@ model ChannelMessage {
 
   channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
   author  User    @relation("ChannelMessageAuthor", fields: [authorId], references: [id])
+  gift    Gift?   @relation(fields: [giftId], references: [id], onDelete: SetNull)
 
   mentions ChannelMessageMention[]
 
@@ -658,9 +660,10 @@ model Gift {
 
   createdAt DateTime @default(now())
 
-  giftType GiftType @relation(fields: [giftTypeId], references: [id])
-  sender   User     @relation("GiftSender", fields: [senderId], references: [id])
-  receiver User     @relation("GiftReceiver", fields: [receiverId], references: [id])
+  giftType        GiftType         @relation(fields: [giftTypeId], references: [id])
+  sender          User             @relation("GiftSender", fields: [senderId], references: [id])
+  receiver        User             @relation("GiftReceiver", fields: [receiverId], references: [id])
+  channelMessages ChannelMessage[]
 
   @@index([receiverId, createdAt])
   @@index([senderId, createdAt])

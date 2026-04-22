@@ -6,7 +6,12 @@
       "Bash(cmd.exe /c \"npx prisma migrate dev --name add_lastReadMessageId_to_channel_read_state\")",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "PowerShell(npx prisma migrate dev --name add_giftId_to_channel_message 2>&1)",
+      "PowerShell(Get-Command node, npx, npm -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-ChildItem \"C:\\\\Program Files\\\\nodejs\" -ErrorAction SilentlyContinue; Get-ChildItem \"$env:APPDATA\\\\npm\" -ErrorAction SilentlyContinue | Select-Object -First 5; ls \"$env:NVM_HOME\" -ErrorAction SilentlyContinue)",
+      "PowerShell(ls \"C:\\\\Users\\\\e.leneillon\\\\AppData\\\\Roaming\\\\nvm\" -ErrorAction SilentlyContinue; ls \"C:\\\\nvm\" -ErrorAction SilentlyContinue; $env:PATH -split \";\" | Where-Object { $_ -match \"node|nvm\" })",
+      "PowerShell($env:PATH -split \";\")"
     ]
   }
 }
